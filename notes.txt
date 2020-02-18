@@ -1,0 +1,9 @@
+- check assembly methods and lengths in Fig 1A
+- regenerate fig1 eps
+- figure 3A: DeluxeDNA should be CheapDNA. Add BsmBI sites.
+- figure 3A: check script details
+- figure 3A: DeluxeDNA too big on the right.
+- figure 3: remove "s"s at the end of words
+- figure 3D: add schema of expression unit on top of figure.
+
+For text

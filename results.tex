@@ -1,0 +1,75 @@
+\section{Results}
+
+\subsection{Definition and resolution of DNA construction problems}
+
+In the proposed framework, users define a DNA assembly problem by indicating the possible flow of DNA (such as oligonucleotides, PCR primers, double-stranded fragments, and intermediary constructs) through different ordering and cloning steps. This is done by designing a so-called supply network, a directed graph expliciting the relationship between different DNA suppliers, for instance DNA vendors, PCR extraction stations (where DNA fragments are amplified from existing constructs or genomes), parts repositories (which list readily-available parts), and assembly stations (which assemble synthetic DNA from smaller fragments produced by upstream suppliers).
+Each supplier in the network defines conditions under which it can produce a given sequence (bounds on sequence length, absence of patterns impeding DNA synthesis, etc.), as well as supplier-specific details, for instance a pricing policy for DNA vendors (which can be a fixed price, a per-basepair price, or any custom function), or a preferred primer annealing temperature for PCR stations. Assembly stations can define the cost of reagents, the maximum number of fragments in an assembly, bounds on sequence length, as well as parameters specific to the cloning method, such as the type-2S enzyme used for a Golden Gate assembly, or the characteristics of fragments homologies used for Gibson assembly (either a constant number of nucleotides, or a target melting temperature).
+
+Supply networks can be defined via scripts using the Python programming language, which allows to freely define sequence constraints and vendor pricings schemes as Python functions, and to use to user-specified databases of available primers, parts and genomes. Alternatively, the web application allows to build supply networks via a visual interface (although with fewer customization options) as shown in Figure 2A. In this example, final constructs of 50kb in length will be assembled via Yeast recombination (bottom supplier in the figure), using fragments provided either by Golden Gate Assembly, Gibson Assembly, or PCR amplification of a segment of the \textit{E. coli} chromosome. In turn, the Golden Gate and Gibson Assembly stations assemble fragments provided either by commercial vendors (\textit{CheapDNA} and \textit{DeluxeDNA} in the example), or by oligonucleotide assembly. The same supplier, \textit{Oligo.com}, provides primers for the PCR station and oligonucletide for the oligo assembly station.
+Once the supply network defined, the user uploads a sequence to build (either in Fasta, Genbank, or raw text format). The assembly station computes a cost-optimal plan for the sequence with respect to the options defined by the supply network (using methods described in Sections 2.2. to 2.4) and returns a
+multi-file assembly report, shown in Figures 2B-2E, detailing the project's predicted total price, the sequences to order commercially, and all intermediary cloning steps.
+
+One advantage of supply networks is the diversity of DNA assembly problems which can be modeled by associating different suppliers, as illustrated in Figure 3. By associating two commercial vendors to a Gibson Assembly station, one can plan assemblies where each fragment is ordered from the cheapest possible vendor, as shown in Figure 3A, left panel. For practicality, a user may prefer to order all fragments from a single supplier, and this preference can be reflected simply by modifying the topology of the supply network (Figure 3A, right panel). Figure 3B shows how a very different problem, namely the design of primers for site-directed mutagenesis, can be implemented with a simple network chaining a primer vendor, a PCR station, and an assembly station. The multi-step assembly of ~50kb arbitrary sequences from oligonucleotides can be modeled with a series of three assembly stations (for oligonucleotide assembly, gibson assembly, and recombination in Yeast, respectively), as shown in Figure 3C. Note that some specificities of oligonucleotide assembly are only partially supported in the current version of DNA Weaver (see the Discussion section). Finally, Figure 3D shows a realistic gene expression unit construction scenario where the final sequence features at the same time standard genetic parts, commercially ordered fragments, and sequences extracted from an \textit{E. coli} chromosome via PCR. The supply network defining this scenario simply associates these different DNA sources to a single assembly station.
+
+
+In addition to the cost of an assembly plan, supply networks also enable to take lead times into account. While the duration of each step is generally hard to predict (DNA vendors generally provide time ranges rather than guaranteed lead times, and the assembly of DNA may require long troubleshooting), researchers may want to indicate that some vendors or assembly plans are more likely to be faster than others. In this perspective, DNA weaver enables to associate a typical lead time, in days, to each vendor, and a cloning duration to each cloning station in the network, as shown in Figure 4. Users can then specify a maximal lead time for the assembly plan, which the solver will attempt to accomodate by selecting faster (and possibly more expensive) vendors and cloning methods, using a methos described in Section 2.2. DNA Weaver also allows to find the assembly plan with the smallest lead time, given a certain budget. This is done by starting from the cost-optimal assembly plan, and progressively reducing the maximal lead time as long as the resulting plan fits the budget.
+
+
+
+\subsection{Internal mechanisms of Supply Networks}
+
+Each edge of the supply network indicates a client-supplier relationship between two DNA sources, enabling them to communicate via sequence requests and quotes (Figure 5A). When a PCR station needs a primer oligonucleotide, or an assembly station needs a particular DNA fragment, they request the sequence from all of their direct suppliers. Each supplier returns a \textit{quote} indicating whether it can provide the sequence, at which price, and with what lead time.
+
+This simple interface between the nodes of a supply network confers modularity to the framework, enabling each network node to implement a custom behavior, and allowing Python users to define and use custom supplier classes without modifying the framework's code. In addition, DNA Weaver comes with built-in supplier classes, whose behavior upon reception of a request is represented schematically in Figure 6.
+
+Finally, the client station then retains the best offer as the fragment price. This chain of competitive bidding between members of the network ensures that each DNA fragment of each assembly is obtained using the cheapest (and most adapted) vendors and assembly methods.
+
+
+Note that supply networks such as represented in Figure 1 show a simplified version of the full cloning protocol required. In particular, the details of the assembly
+
+Finally, the cascading requests for quotes also enables to constrain assembly plans with a maximal lead time. For instance, vendor stations will only accept requests with a maximal lead time greater than their own lead time. Cloning stations, when presented with a maximal lead time, will subtract the time they need for the cloning step itself, in order to obtain a new lead time for their own suppliers. Figure 5D illustrates how this mechanism effectively prunes the possible DNA paths in the supply network.  
+
+
+
+
+\subsection{Efficient sequence decomposition via shortest path algorithms}
+
+To provide a sequence at the best price, an assembly station must find the cheapest possible set of fragments which can be assembled into the desired sequence. This often amounts to identifying which regions of the sequence can be inexpensively obtained from DNA repositories or from the cheapest
+vendors. Considering every possible sequence decomposition is generally prohibited by the large number of possibilities: in the extreme case where no contraints on fragments size or number of fragments, each position in a sequence of $N$ nucleotides can be a separation between two segments, resulting in $2^N$ possible decompositions. Even the simpler problem of dividing a 1kb sequence into 10 segments, a classic example of \textit{stars and bars} problem (REF), admits over $2.10^{21}$ possible solutions. Current tools generally first decide on a number of fragments, and perform local optimizations (REF Ernst, Genedesign) or use genetic algorithms (REF MOODA).
+
+The sequence decomposition algorithm in DNA Weaver uses a different approach: it first starts by building a so-called costs graph where each edge represents a possible sequence fragment between two positions in the sequence, and an edge’s weight is the fragment’s cost, including the addition of assembly overhangs, which may depend on the assembly method, as shown in Figure 7A. In this cost graph, the shortest path from the node representing the first nucleotide to the node representing the last nucleotide gives a cost-optimal decomposition of the sequence into fragments(Figure 7B).
+
+Simple graph operations enable to accomodate the requirements of cloning methods can be implemented via operations on the decomposition graph. For instance, if an assembly method provides bounds for fragments lengths, it suffices to remove the 
+
+Another is Oligo assembly reverse every two, and even number of fragments
+
+Another advantage of the graph approach is its computational efficiency. The shortest path algorithm can be computed using the Dijkstra algorithm \citep{Delling2009}, which is in .  computational complexity to cost all possible edges is $O(L^2)$ (where L is the sequence length).
+DNA Weaver also implements approximate resolution approaches such as the A*
+path-finding algorithm [3] or nucleotide-skipping, which
+can reduce the number of edges to compute by orders of
+magnitude, allowing quasi-real-time sequence editing with
+manufacturability feedback.
+Further graph operations allow to model the limitations
+of a cloning method, e.g. by limiting the number of parts
+in an assembly, constraining fragments sizes, forbidding in-
+compatible overhangs to be used in a same cloning step,
+or preventing high-GC regions to be used as overhangs. It
+is also possible, by filtering graph edges based on supplier
+lead time, to obtain the cheapest cloning strategy under a
+time constraint
+
+
+
+
+A key step in the design of optimized assembly plan is the identification of an optimal partition of a sequence into fragments to assemble.
+-REPP deterministic approach
+- Genome Partitioner, deterministic.
+- In Gene Designer, genetic networks?
+
+DNA Weaver proposes a graph-based approach to find optimal solutions in reasonable computing time. a mechanism in which the Attempting (in the extreme case where there is )
+
+
+
+
+To allow each fragment also possible to reduce the number of fragments in the final solution by adding a constant weight to each edge of the graph.
+
